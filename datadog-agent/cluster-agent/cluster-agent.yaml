@@ -52,6 +52,8 @@ spec:
               secretKeyRef:
                 name: datadog-auth-token
                 key: token
+          # - name: DD_CLUSTER_AGENT_AUTH_TOKEN
+          #   value: '<ThirtyX2X\nha$ac!*ersXl\ngXtoken>'
         # Other environment variables from ConfigMap cm-datadog-env.yaml
         envFrom:
           - configMapRef:

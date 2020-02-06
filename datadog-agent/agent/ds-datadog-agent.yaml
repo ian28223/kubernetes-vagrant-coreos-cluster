@@ -18,19 +18,20 @@ spec:
       #   image: busybox
       #   command: ['/bin/sleep', '15']
       containers:
-      - image: datadog/agent:latest # Agent builds: https://hub.docker.com/r/datadog/agent/tags/
-      #- image: datadog/agent-dev:latest # Agent-Dev builds: https://hub.docker.com/r/datadog/agent-dev/tags/
-        imagePullPolicy: Always
+      - 
+        image: datadog/agent:7 # Agent builds: https://hub.docker.com/r/datadog/agent/tags/
+        # image: datadog/agent-dev:latest # Agent-Dev builds: https://hub.docker.com/r/datadog/agent-dev/tags/
+        # imagePullPolicy: Always
         name: datadog-agent
-        # livenessProbe:
-        #   httpGet:
-        #     path: /health
-        #     port: 5555
-        #   initialDelaySeconds: 15
-        #   periodSeconds: 15
-        #   timeoutSeconds: 5
-        #   successThreshold: 1
-        #   failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5555
+          initialDelaySeconds: 15
+          periodSeconds: 15
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
         ports:
           - containerPort: 8125
             hostPort: 8125
@@ -59,13 +60,16 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - {name: DD_DOGSTATSD_SOCKET, value: "/var/run/datadog/dsd.socket"}
+
+
           # Other env variables
           - name: ENV
             valueFrom:
               configMapKeyRef:
                 name: cm-other-env
                 key: MY_ENV
-        # Other environment variables from ConfigMap cm-datadog-env
+        # Other environment variables from ConfigMap cm-datadog-env[.yaml]
         envFrom:
           - configMapRef:
               name: cm-datadog-env
@@ -87,6 +91,7 @@ spec:
 
           # DD Log collection setup
           - {name: datadogrunpath, mountPath: /opt/datadog-agent/run}
+          - {name: logpodpath, mountPath: /var/log/pods}
 
           # DD conf.d and checks.d
           # Example: Mount a volume. Each data item will be created as a file.
@@ -94,7 +99,7 @@ spec:
 
           # Example: Custom check
           - name: vol-datadog-checksd
-            mountPath: /opt/datadog-agent/checks.d/hello.py
+            mountPath: /etc/datadog-agent/checks.d/hello.py
             subPath: hello.py
           - name: emptydir
             mountPath: /etc/datadog-agent/conf.d/disk.d/
@@ -111,8 +116,10 @@ spec:
           # Others stuff
           - { name: wheels, mountPath: /host/wheels, readOnly: true}
           - { name: ssl-certs, mountPath: /etc/kubernetes/ssl}
+          - { name: dsdsocket, mountPath: /var/run/datadog}
       volumes:
         # DD Default stuff
+        - {name: dsdsocket, hostPath: {path: /var/run/datadog/}}
         - {name: dockersocket, hostPath: {path: /var/run/docker.sock}}
         - {name: procdir, hostPath: {path: /proc}}
         - {name: cgroups, hostPath: {path: /sys/fs/cgroup}}
@@ -120,6 +127,9 @@ spec:
         - name: datadogrunpath
           hostPath:
             path: /opt/datadog-agent/run
+        - name: logpodpath
+          hostPath:
+            path: /var/log/pods
         # DD conf.d and checks.d
         - { name: file-datadog-kubernetes, configMap: {name: cm-datadog-yaml}}
         - { name: vol-datadog-confd, configMap: {name: cm-datadog-confd}}
