@@ -6,7 +6,14 @@ require "net/http"
 require "open-uri"
 require "json"
 require "date"
-require "pathname"
+require "pathname" 
+
+# Require YAML module
+require 'yaml'
+ 
+# Read YAML file with box details
+CONF = YAML.load_file(File.join(File.dirname(__FILE__), "Vagrantfile_config.yaml")) || {}
+## CONF['param']
 
 class Module
   def redefine_const(name, value)
@@ -69,7 +76,7 @@ NODE_YAML = File.join(File.dirname(__FILE__), "node.yaml")
 
 # AUTHORIZATION MODE is a setting for enabling or disabling RBAC for your Kubernetes Cluster
 # The default mode is ABAC.
-AUTHORIZATION_MODE = ENV['AUTHORIZATION_MODE'] || 'RBAC'
+AUTHORIZATION_MODE = ENV['AUTHORIZATION_MODE'] || CONF['authorization_mode'] || 'RBAC'
 
 if AUTHORIZATION_MODE == "RBAC"
   CERTS_MASTER_SCRIPT = File.join(File.dirname(__FILE__), "tls/make-certs-master-rbac.sh")
@@ -88,9 +95,9 @@ DOCKERCFG = File.expand_path(ENV["DOCKERCFG"] || "~/.dockercfg")
 
 DOCKER_OPTIONS = ENV["DOCKER_OPTIONS"] || ""
 
-KUBERNETES_VERSION = ENV["KUBERNETES_VERSION"] || "1.12.4"
+KUBERNETES_VERSION = ENV["KUBERNETES_VERSION"] || CONF['kubernetes_version'] || "1.13.12"
 
-CHANNEL = ENV["CHANNEL"] || "alpha"
+CHANNEL = ENV["CHANNEL"] || CONF['coreos_channel'] || "alpha"
 
 #if CHANNEL != 'alpha'
 #  puts "============================================================================="
@@ -102,7 +109,7 @@ CHANNEL = ENV["CHANNEL"] || "alpha"
 #  puts "============================================================================="
 #end
 
-COREOS_VERSION = ENV["COREOS_VERSION"] || "latest"
+COREOS_VERSION = ENV["COREOS_VERSION"] || CONF['coreos_version']  || "latest"
 upstream = "http://#{CHANNEL}.release.core-os.net/amd64-usr/#{COREOS_VERSION}"
 if COREOS_VERSION == "latest"
   upstream = "http://#{CHANNEL}.release.core-os.net/amd64-usr/current"
@@ -111,29 +118,29 @@ if COREOS_VERSION == "latest"
                         open(url).read().scan(/COREOS_VERSION=.*/)[0].gsub("COREOS_VERSION=", ""))
 end
 
-NODES = ENV['NODES'] || 1
+NODES = ENV['NODES'] || CONF['worker_node']['count'] || 1
 
-MASTER_MEM = ENV['MASTER_MEM'] || 1500
-MASTER_CPUS = ENV['MASTER_CPUS'] || 2
+MASTER_MEM = ENV['MASTER_MEM'] || CONF['master_node']['memory'] || 1500
+MASTER_CPUS = ENV['MASTER_CPUS'] || CONF['master_node']['cpus'] || 2
 
-NODE_MEM= ENV['NODE_MEM'] || 2048
-NODE_CPUS = ENV['NODE_CPUS'] || 1
+NODE_MEM= ENV['NODE_MEM'] || CONF['worker_node']['memory'] || 2048
+NODE_CPUS = ENV['NODE_CPUS'] || CONF['worker_node']['cpus'] || 1
 
-BASE_IP_ADDR = ENV["BASE_IP_ADDR"] || "172.17.8"
+BASE_IP_ADDR = ENV["BASE_IP_ADDR"] || CONF['base_ip_address'] || "172.17.8"
 
 # DNS_PROVIDER = ENV['DNS_PROVIDER'] || "kube-dns" # default: coredns
-DNS_DOMAIN = ENV['DNS_DOMAIN'] || "cluster.local"
+DNS_DOMAIN = ENV['DNS_DOMAIN'] || CONF['dns_domain'] || "cluster.local"
 
 SERIAL_LOGGING = (ENV["SERIAL_LOGGING"].to_s.downcase == "true")
 GUI = (ENV["GUI"].to_s.downcase == "true")
-USE_KUBE_UI = (ENV["USE_KUBE_UI"].to_s.downcase == "true") || true
+USE_KUBE_UI = (ENV["USE_KUBE_UI"].to_s.downcase == "true") || CONF['use_kube_ui'] || true
 
-BOX_TIMEOUT_COUNT = (ENV["BOX_TIMEOUT_COUNT"] || 50).to_i
+BOX_TIMEOUT_COUNT = (ENV["BOX_TIMEOUT_COUNT"] || CONF['box_timeout_count'] || 50).to_i
 
 if enable_proxy
-  HTTP_PROXY = ENV["HTTP_PROXY"] || ENV["http_proxy"]
-  HTTPS_PROXY = ENV["HTTPS_PROXY"] || ENV["https_proxy"]
-  NO_PROXY = ENV["NO_PROXY"] || ENV["no_proxy"] || "localhost"
+  HTTP_PROXY = ENV["HTTP_PROXY"] || ENV["http_proxy"] || CONF['proxy']['http']
+  HTTPS_PROXY = ENV["HTTPS_PROXY"] || ENV["https_proxy"] || CONF['proxy']['https']
+  NO_PROXY = ENV["NO_PROXY"] || ENV["no_proxy"] || CONF['proxy']['noproxy'] || "localhost" 
 end
 
 REMOVE_VAGRANTFILE_USER_DATA_BEFORE_HALT = (ENV["REMOVE_VAGRANTFILE_USER_DATA_BEFORE_HALT"].to_s.downcase == "true")
@@ -143,9 +150,9 @@ REMOVE_VAGRANTFILE_USER_DATA_BEFORE_HALT = (ENV["REMOVE_VAGRANTFILE_USER_DATA_BE
 MOUNT_POINTS = YAML::load_file(File.join(File.dirname(__FILE__), "synced_folders.yaml"))
 
 # CLUSTER_CIDR is the CIDR used for pod networking
-CLUSTER_CIDR = ENV["CLUSTER_CIDR"] || "10.244.0.0/16"
+CLUSTER_CIDR = ENV["CLUSTER_CIDR"] || CONF['cluster_cidr'] || "10.244.0.0/16"
 
-APPEND_HOSTIP = ENV['APPEND_HOSTIP'] || false
+APPEND_HOSTIP = ENV['APPEND_HOSTIP'] || CONF['append_hostip'] || false
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # always use host timezone in VMs
@@ -210,9 +217,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     config.hostmanager.manage_host = true
     config.hostmanager.manage_guest = true
   end
-  hostname_prefix = "k8s-"
-  hostname_master = "master"
-  hostname_node = "node"
+  hostname_prefix = CONF['hostname']['prefix'] || "k8s-"
+  hostname_master = CONF['hostname']['master'] || "master"
+  hostname_worker = CONF['hostname']['worker'] || "node"
   (1..(NODES.to_i + 1)).each do |i|
     vm_ip_addr = "#{BASE_IP_ADDR}.#{i + 100}"
     if i == 1
@@ -224,7 +231,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       cpus = MASTER_CPUS
       MASTER_IP = "#{vm_ip_addr}"
     else
-      node_hostname = "#{hostname_prefix}#{hostname_node}%02d" % [(i - 1)]
+      node_hostname = "#{hostname_prefix}#{hostname_worker}%02d" % [(i - 1)]
       hostname = node_hostname
       cfg = NODE_YAML
       memory = NODE_MEM

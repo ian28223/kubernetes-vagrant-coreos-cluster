@@ -1,0 +1,54 @@
+authorization_mode: 'RBAC'
+
+
+# kubernetes_version:  "1.10.13" ## Working as of 2020 Feb
+# kubernetes_version:  "1.11.10" ## Working as of 2020 Feb
+# kubernetes_version:  "1.12.10" ## Working as of 2020 Feb
+kubernetes_version:  "1.13.12" ## Working as of 2020 Feb
+# kubernetes_version:  "1.14.10" ## Not working
+# kubernetes_version:  "1.15.9" ## Not working
+# kubernetes_version:  "1.16.6"
+# kubernetes_version:  "1.17.2" ## Not working
+
+
+dns_domain: 'cluster.local'
+
+# IP address of the nodes
+base_ip_address: '172.17.8'
+
+# IP address range Kubernetes resources.
+cluster_cidr: '10.244.0.0/16'
+
+hostname:
+  prefix: 'k8s-'
+  master: 'master' # e.g. k8s-master
+  worker: 'node'   # e.g. k8s-node01, k8s-node02, ...
+
+master_node:
+  memory: 1500
+  cpus: 2
+
+worker_node:
+  count: 1
+  memory: 2048
+  cpus: 1
+
+proxy:
+  http: ''
+  https: ''
+  noproxy: 'localhost'
+
+
+# Deploys kubernetes/dashboard if true
+use_kube_ui: true
+
+# VM deployment timeout 
+box_timeout_count: 50
+
+
+# Append hosts's IP address to hostname. E.g. k8s-master-172-17-8-101
+# Note: host's IP address also set in K8s Node Roles
+append_hostip: false
+
+# coreos_channel: 'alpha'
+# coreos_version: 'latest'
