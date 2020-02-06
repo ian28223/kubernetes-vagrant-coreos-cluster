@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploy-twistlock
+spec:
+  selector:
+    matchLabels:
+      app: twistlock-console
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        ad.datadoghq.com/twistlock-console.check_names: '["twistlock"]'
+        ad.datadoghq.com/twistlock-console.init_configs: '[{}]'
+        ad.datadoghq.com/twistlock-console.instances: '[{"url":"http://%%host%%:%%port%%", "username": "datadog", "password": "nil", "min_collection_interval": 5}]'
+      labels:
+        app: twistlock-console
+    spec:
+      containers:
+      - name: twistlock-console
+        image: nginx
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: workdir
+          mountPath: /usr/share/nginx/html/fixtures/
+        - name: nginxconfig
+          mountPath: /etc/nginx/conf.d
+
+      volumes:
+        - name: nginxconfig
+          configMap:
+            name: cm-nginx-twistlock
+            items:
+            - key: nginx-conf
+              path: twistlock.conf
+        - name: workdir
+          emptyDir: {}
+      initContainers:
+      - name: install
+        image: mibcd/ubuntools
+        command: ["/bin/sh","-c"]
+        args: ["curl -O https://raw.githubusercontent.com/DataDog/integrations-core/master/twistlock/tests/fixtures/license.json;curl -O https://raw.githubusercontent.com/DataDog/integrations-core/master/twistlock/tests/fixtures/containers.json;curl -O https://raw.githubusercontent.com/DataDog/integrations-core/master/twistlock/tests/fixtures/registry.json;curl -O https://raw.githubusercontent.com/DataDog/integrations-core/master/twistlock/tests/fixtures/hosts.json;curl -O https://raw.githubusercontent.com/DataDog/integrations-core/master/twistlock/tests/fixtures/images.json;curl -O https://raw.githubusercontent.com/DataDog/integrations-core/master/twistlock/tests/fixtures/vulnerabilities.json; mv *.json /work-dir;"]
+        volumeMounts:
+        - name: workdir
+          mountPath: "/work-dir"
+      dnsPolicy: Default
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: cm-nginx-twistlock
+  namespace: default
+data:
+  nginx-conf: |
+    server {
+      listen 8080 default_server;
+      listen [::]:8080 default_server;
+
+      root /usr/share/nginx/html/;
+
+      # Add index.php to the list if you are using PHP
+      index index.html index.htm index.nginx-debian.html;
+
+      server_name _;
+
+      location /api/v1/settings/license {
+        try_files $uri /fixtures/license.json;
+      }
+
+      location /api/v1/registry {
+        try_files $uri /fixtures/registry.json;
+      }
+
+      location /api/v1/images {
+        try_files $uri /fixtures/images.json;
+      }
+
+      location /api/v1/hosts {
+        try_files $uri /fixtures/hosts.json;
+      }
+
+      location /api/v1/containers {
+        try_files $uri /fixtures/containers.json;
+      }
+
+      location /api/v1/stats/vulnerabilities {
+        try_files $uri /fixtures/vulnerabilities.json;
+      }
+    }
+
